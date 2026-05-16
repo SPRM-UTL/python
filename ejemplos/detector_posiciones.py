@@ -12,14 +12,14 @@ import sys
 # Intenta importar mediapipe con mejor manejo de errores
 try:
     import mediapipe as mp
-    print("✅ MediaPipe importado correctamente")
+    print("MediaPipe importado correctamente")
 except ImportError as e:
-    print(f"❌ Error al importar MediaPipe: {e}")
+    print(f"Error al importar MediaPipe: {e}")
     print("\nPor favor instala MediaPipe con:")
     print("pip install mediapipe==0.10.8")
     sys.exit(1)
 except AttributeError as e:
-    print(f"❌ Error de atributo en MediaPipe: {e}")
+    print(f"Error de atributo en MediaPipe: {e}")
     print("\nEs posible que tengas una versión muy antigua o corrupta.")
     print("Prueba a desinstalar y reinstalar:")
     print("pip uninstall mediapipe -y")
@@ -30,12 +30,12 @@ except AttributeError as e:
 try:
     cap_test = cv2.VideoCapture(0)
     if not cap_test.isOpened():
-        print("⚠️  Advertencia: No se pudo abrir la cámara 0")
+        print("Advertencia: No se pudo abrir la camara 0")
     else:
-        print("✅ Cámara detectada")
+        print("Camara detectada")
         cap_test.release()
 except Exception as e:
-    print(f"⚠️  Error al probar la cámara: {e}")
+    print(f"Error al probar la camara: {e}")
 
 
 class RastreadorCuerpo:
@@ -49,9 +49,9 @@ class RastreadorCuerpo:
                 min_tracking_confidence=0.7
             )
             self.mp_drawing = mp.solutions.drawing_utils
-            print("✅ Rastreador inicializado correctamente")
+            print("Rastreador inicializado correctamente")
         except Exception as e:
-            print(f"❌ Error al inicializar MediaPipe Pose: {e}")
+            print(f"Error al inicializar MediaPipe Pose: {e}")
             raise
         
         self.posicion_anterior = ""
@@ -187,26 +187,26 @@ def limpiar_terminal():
 
 def main():
     print("=" * 60)
-    print("🔍 RASTREADOR DE CUERPO COMPLETO")
+    print("RASTREADOR DE CUERPO COMPLETO")
     print("=" * 60)
     
     # Inicializar rastreador
     try:
         rastreador = RastreadorCuerpo()
     except Exception as e:
-        print(f"\n❌ No se pudo inicializar el rastreador: {e}")
+        print(f"\nNo se pudo inicializar el rastreador: {e}")
         return
     
     # Inicializar cámara
-    print("\n📷 Iniciando cámara...")
+    print("\nIniciando camara...")
     cap = cv2.VideoCapture(0)
     
     if not cap.isOpened():
-        print("❌ Error: No se pudo abrir la cámara 0")
+        print("Error: No se pudo abrir la camara 0")
         print("   Prueba a cambiar el número de cámara o verifica conexiones")
         return
     
-    print("✅ Todo listo. Presiona 'q' para salir\n")
+    print("Todo listo. Presiona 'q' para salir\n")
     
     posicion_mostrada = ""
     frame_count = 0
@@ -215,7 +215,7 @@ def main():
         while True:
             exito, frame = cap.read()
             if not exito:
-                print("❌ Error al leer frame")
+                print("Error al leer frame")
                 break
 
             # Espejo
@@ -244,7 +244,7 @@ def main():
             if frame_count % 10 == 0 and posicion != posicion_mostrada:
                 limpiar_terminal()
                 print("=" * 60)
-                print(f"📍 POSICIÓN: {posicion}")
+                print(f"POSICION: {posicion}")
                 print("=" * 60)
                 print(f"Frame: {frame_count}")
                 print("Presiona 'q' para salir")
@@ -259,11 +259,11 @@ def main():
                 break
                 
     except KeyboardInterrupt:
-        print("\n👋 Programa interrumpido")
+        print("\nPrograma interrumpido")
     finally:
         cap.release()
         cv2.destroyAllWindows()
-        print("✅ Finalizado")
+        print("Finalizado")
 
 
 if __name__ == "__main__":

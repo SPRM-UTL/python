@@ -17,7 +17,7 @@ label_map = {label: num for num, label in enumerate(ACCIONES)}
 
 secuencias, etiquetas = [], []
 
-print("📂 Cargando dataset desde el disco...")
+print("Cargando dataset desde el disco...")
 # 1. Recolectar y organizar los datos
 for accion in ACCIONES:
     carpeta_accion = os.path.join(DATASET_PATH, accion)
@@ -37,7 +37,7 @@ y = to_categorical(etiquetas).astype(int) # Convierte [0, 1, 2] a formato binari
 # Dividir en 80% entrenamiento y 20% pruebas
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-print(f"\n📊 Datos listos para entrenamiento:")
+print(f"\nDatos listos para entrenamiento:")
 print(f" - Set de entrenamiento: {X_train.shape}")
 print(f" - Set de pruebas: {X_test.shape}")
 
@@ -60,14 +60,14 @@ model.add(Dense(ACCIONES.shape[0], activation='softmax'))
 # Compilar el modelo
 model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
-print("\n🚀 Iniciando entrenamiento de la IA...")
+print("\nIniciando entrenamiento de la IA...")
 # 3. Entrenar el modelo
 # Modifica epochs=100 si tienes pocas muestras, o súbelo a 200 si quieres más precisión.
 model.fit(X_train, y_train, epochs=150, batch_size=4, validation_data=(X_test, y_test))
 
-print("\n📝 Estructura final de tu IA:")
+print("\nEstructura final de tu IA:")
 model.summary()
 
 # 4. Guardar el cerebro entrenado
 model.save('detector_movimientos.h5')
-print("\n✅ ¡Felicidades! Tu IA de movimiento se ha guardado como 'detector_movimientos.h5'")
+print("\nTu IA de movimiento se ha guardado como 'detector_movimientos.h5'")

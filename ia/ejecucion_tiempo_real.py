@@ -1,5 +1,5 @@
 # =====================================================================
-# 🛠️ PARCHE DE COMPATIBILIDAD GOOGLE PROTOBUF / TENSORFLOW / MEDIAPIPE
+# PARCHE DE COMPATIBILIDAD GOOGLE PROTOBUF / TENSORFLOW / MEDIAPIPE
 # =====================================================================
 import sys
 import types
@@ -62,7 +62,7 @@ class CapturadorVideoCamara:
         self.cap.release()
 
 # 2. Inicializar componentes principales
-print("🧠 Cargando modelo de Inteligencia Artificial...")
+print("Cargando modelo de Inteligencia Artificial...")
 modelo = load_model('detector_movimientos.h5')
 
 mp_pose = mp.solutions.pose
@@ -79,7 +79,7 @@ contador_confirmacion = 0
 CONFIRMACION_UMBRAL = 10  # Cuántos frames seguidos debe ver la acción para activarse
 ultima_accion_detectada = "reposo"
 
-print("\n🚀 ¡Sistema en marcha! Párate frente a la cámara.")
+print("\nSistema en marcha. Párate frente a la cámara.")
 print("Usa tu movimiento de 'aplaudir' para iniciar/detener el escaneo.")
 
 while True:
@@ -122,7 +122,7 @@ while True:
         if contador_confirmacion >= CONFIRMACION_UMBRAL:
             escaneo_activo = not escaneo_activo  # <-- Corrección limpia sin referencias a 'self'
             contador_confirmacion = 0
-            print(f"🔄 ¡INTERRUPTOR ACTIVADO! Estado del escaneo: {escaneo_activo}")
+            print(f"INTERRUPTOR ACTIVADO. Estado del escaneo: {escaneo_activo}")
             time.sleep(1) # Pequeña pausa de cortesía para que el usuario baje las manos
     else:
         if contador_confirmacion > 0:

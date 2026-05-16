@@ -50,7 +50,7 @@ while cap.isOpened():
         carpeta_accion = os.path.join(DATASET_PATH, accion_seleccionada)
         archivos_existentes = len(os.listdir(carpeta_accion))
         
-        print(f"\n🔴 PREPÁRATE: Grabando muestra #{archivos_existentes} para '{accion_seleccionada}' en 2 segundos...")
+        print(f"\nPREPARATE: Grabando muestra #{archivos_existentes} para '{accion_seleccionada}' en 2 segundos...")
         time.sleep(2)
         
         secuencia_datos = []
@@ -82,7 +82,7 @@ while cap.isOpened():
             else:
                 # Si el humano se sale del frame, avisamos y no contamos ese frame
                 frame_espejo = cv2.flip(frame, 1)
-                cv2.putText(frame_espejo, "¡SITUATE EN FRENTE DE LA CAMARA!", (15, 30), 
+                cv2.putText(frame_espejo, "SITUATE EN FRENTE DE LA CAMARA", (15, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
                 cv2.imshow('Recolector de Datos', frame_espejo)
                 cv2.waitKey(1)
@@ -90,7 +90,7 @@ while cap.isOpened():
         # Guardar la secuencia completa de 30 frames en un archivo numpy binario
         ruta_guardado = os.path.join(carpeta_accion, f"muestra_{archivos_existentes}.npy")
         np.save(ruta_guardado, secuencia_datos)
-        print(f"✅ ¡Muestra guardada con éxito en: {ruta_guardado}!")
+        print(f"Muestra guardada en: {ruta_guardado}")
 
 cap.release()
 cv2.destroyAllWindows()
