@@ -9,7 +9,7 @@ Teclas:
   [d]  Activar / pausar detección
   [q]  Salir
 
-En el dialogo de nombre: Tab alterna movimientos existentes, Esc cancela.
+En el dialogo de grabacion: selector de movimientos existentes o nuevo, Esc cancela.
 """
 import sys
 import time
@@ -21,17 +21,21 @@ import numpy as np
 
 from movimiento.ui_camara import cuenta_regresiva, pedir_nombre_movimiento
 from movimiento.utilidades_pose import (
+    buscar_clave_por_nombre,
     cargar_referencias,
+    detectar_mejor,
+    frame_a_vector_completo,
     guardar_referencia,
-    landmarks_a_vector,
-    mejor_similitud,
+    nombre_visible,
+    preparar_indice_deteccion,
+    resumen_extras,
     resumen_referencias,
-    umbral_deteccion,
 )
 
 LARGO_SECUENCIA = 30
 COOLDOWN_SEGUNDOS = 2.5
 CUENTA_REGRESIVA_SEG = 3
+INTERVALO_DETECCION = 3
 
 
 def _beep():
@@ -41,6 +45,23 @@ def _beep():
         winsound.Beep(880, 200)
     except Exception:
         print("\a", end="", flush=True)
+
+
+def _formatear_extras_ui(extras: list[float]) -> list[tuple[str, tuple]]:
+    info = resumen_extras(extras)
+    dedos_izq = int(info["dedos_izq"]) if info["dedos_izq"] >= 0 else "?"
+    dedos_der = int(info["dedos_der"]) if info["dedos_der"] >= 0 else "?"
+    return [
+        (f"Dedos: Izq {dedos_izq}  Der {dedos_der}", (200, 255, 200)),
+        (
+            f"Inclinacion: cuerpo {info['incl_cuerpo']:+.0f}  hombros {info['incl_hombros']:+.0f}",
+            (200, 220, 255),
+        ),
+        (
+            f"              cabeza {info['incl_cabeza']:+.0f}  brazo {info['incl_brazo']:+.0f}",
+            (200, 220, 255),
+        ),
+    ]
 
 
 def _dibujar_texto(frame, lineas, y_inicio=30):
@@ -56,7 +77,7 @@ def _dibujar_texto(frame, lineas, y_inicio=30):
         )
 
 
-def grabar_secuencia(cap, pose) -> list | None:
+def grabar_secuencia(cap, pose, hands) -> list | None:
     secuencia = []
     frames_sin_cuerpo = 0
 
@@ -67,10 +88,14 @@ def grabar_secuencia(cap, pose) -> list | None:
 
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         resultados = pose.process(frame_rgb)
+        resultados_manos = hands.process(frame_rgb)
         vista = cv2.flip(frame, 1)
 
         if resultados.pose_landmarks:
-            secuencia.append(landmarks_a_vector(resultados.pose_landmarks))
+            vector = frame_a_vector_completo(
+                resultados.pose_landmarks, resultados_manos
+            )
+            secuencia.append(vector)
             frames_sin_cuerpo = 0
             progreso = f"GRABANDO {len(secuencia)}/{LARGO_SECUENCIA}"
             color = (0, 0, 255)
@@ -100,19 +125,29 @@ def main():
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     mp_pose = mp.solutions.pose
+    mp_hands = mp.solutions.hands
     pose = mp_pose.Pose(
         static_image_mode=False,
         model_complexity=0,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5,
     )
+    hands = mp_hands.Hands(
+        static_image_mode=False,
+        max_num_hands=2,
+        model_complexity=0,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
 
     referencias = cargar_referencias()
+    indice_deteccion = preparar_indice_deteccion(referencias)
     buffer = deque(maxlen=LARGO_SECUENCIA)
     deteccion_activa = bool(referencias)
     ultimo_aviso = 0.0
     ultimo_match = ""
     estado_ui = "LISTO"
+    contador_frames = 0
 
     print("=" * 55)
     print("  DETECTOR DE MOVIMIENTO PERSONALIZADO")
@@ -124,6 +159,7 @@ def main():
     print("  [q] Salir")
     print()
     print("  Tip: graba el mismo movimiento 3-5 veces para mejorar la detección.")
+    print("  Incluye dedos e inclinacion: re-graba gestos antiguos para mayor precision.")
     print()
 
     while True:
@@ -133,37 +169,43 @@ def main():
 
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         resultados = pose.process(frame_rgb)
+        resultados_manos = hands.process(frame_rgb)
         vista = cv2.flip(frame, 1)
+        extras_actuales = None
 
         if resultados.pose_landmarks:
-            buffer.append(landmarks_a_vector(resultados.pose_landmarks))
+            vector = frame_a_vector_completo(
+                resultados.pose_landmarks, resultados_manos
+            )
+            extras_actuales = vector[-6:]
+            buffer.append(vector)
 
-            if deteccion_activa and referencias and len(buffer) == LARGO_SECUENCIA:
-                actual = np.array(buffer, dtype=np.float32)
-                mejor_nombre = ""
-                mejor_score = 0.0
-                umbral_actual = 0.0
-
-                for nombre, muestras in referencias.items():
-                    score = mejor_similitud(muestras, actual)
-                    if score > mejor_score:
-                        mejor_score = score
-                        mejor_nombre = nombre
-                        umbral_actual = umbral_deteccion(len(muestras))
-
-                ahora = time.time()
-                if (
-                    mejor_nombre
-                    and mejor_score >= umbral_actual
-                    and ahora - ultimo_aviso > COOLDOWN_SEGUNDOS
-                ):
-                    ultimo_aviso = ahora
-                    ultimo_match = mejor_nombre
-                    estado_ui = f"DETECTADO: {mejor_nombre.upper()}"
-                    print(f"\n[{mejor_nombre}] detectado")
-                    _beep()
+            if (
+                deteccion_activa
+                and indice_deteccion
+                and len(buffer) == LARGO_SECUENCIA
+            ):
+                contador_frames += 1
+                if contador_frames % INTERVALO_DETECCION == 0:
+                    actual = np.array(buffer, dtype=np.float32)
+                    mejor_nombre, mejor_score, umbral_actual = detectar_mejor(
+                        indice_deteccion, actual
+                    )
+                    ahora = time.time()
+                    if (
+                        mejor_nombre
+                        and mejor_score >= umbral_actual
+                        and ahora - ultimo_aviso > COOLDOWN_SEGUNDOS
+                    ):
+                        ultimo_aviso = ahora
+                        ultimo_match = mejor_nombre
+                        estado_ui = f"DETECTADO: {mejor_nombre.upper()}"
+                        print(f"\n[{mejor_nombre}] detectado")
+                        _beep()
         else:
             buffer.clear()
+
+        reciente = time.time() - ultimo_aviso < 1.5
 
         lineas = [
             (f"Estado: {estado_ui}", (255, 255, 255)),
@@ -173,13 +215,14 @@ def main():
             ),
         ]
 
-        if referencias:
-            for nombre, muestras in referencias.items():
-                lineas.append((f"  {nombre}: {len(muestras)} muestra(s)", (180, 180, 180)))
-        else:
-            lineas.append(("Sin referencias - pulsa [r]", (0, 165, 255)))
+        if ultimo_match:
+            color_ultimo = (0, 255, 0) if reciente else (0, 220, 200)
+            lineas.append((f"Último detectado: {ultimo_match}", color_ultimo))
 
-        if time.time() - ultimo_aviso < 1.5 and ultimo_match:
+        if extras_actuales is not None:
+            lineas.extend(_formatear_extras_ui(extras_actuales))
+
+        if reciente and ultimo_match:
             cv2.rectangle(vista, (0, 0), (vista.shape[1], vista.shape[0]), (0, 255, 0), 12)
             lineas.insert(0, (f"{ultimo_match.upper()} DETECTADO", (0, 255, 0)))
 
@@ -199,15 +242,18 @@ def main():
                 print(f"Detección: {'ACTIVA' if deteccion_activa else 'PAUSADA'}")
 
         if tecla == ord("r"):
-            nombre = pedir_nombre_movimiento(cap, list(referencias.keys()))
+            movimientos_ui = [
+                (nombre_visible(k), len(referencias[k]))
+                for k in sorted(referencias, key=nombre_visible)
+            ]
+            nombre = pedir_nombre_movimiento(cap, movimientos_ui)
             if not nombre:
                 print("Grabacion cancelada.")
                 continue
 
-            nombre_key = "".join(
-                c if c.isalnum() or c in "-_" else "_" for c in nombre.strip()
-            ).lower() or "movimiento"
-            n_antes = len(referencias.get(nombre_key, []))
+            clave = buscar_clave_por_nombre(referencias, nombre)
+            nombre_key = nombre_visible(clave) if clave else nombre.strip().lower()
+            n_antes = len(referencias.get(clave, [])) if clave else 0
             numero_muestra = n_antes + 1
 
             if not cuenta_regresiva(
@@ -220,14 +266,17 @@ def main():
                 continue
 
             print("Grabando... manten el movimiento ~1 segundo.")
-            secuencia = grabar_secuencia(cap, pose)
+            secuencia = grabar_secuencia(cap, pose, hands)
             if secuencia:
-                ruta, total = guardar_referencia(nombre, secuencia)
+                ruta, total, clave = guardar_referencia(nombre, secuencia, clave_existente=clave)
                 referencias = cargar_referencias()
+                indice_deteccion = preparar_indice_deteccion(referencias)
                 deteccion_activa = True
                 buffer.clear()
+                contador_frames = 0
                 estado_ui = f"GUARDADO: {nombre_key} ({total})"
                 print(f"Guardado: {ruta}")
+                print(f"  Clave: {clave}")
                 print(f"  Total muestras de '{nombre_key}': {total}")
                 if total < 3:
                     print("  Consejo: graba 2-3 veces más el mismo movimiento con [r].")
@@ -237,6 +286,7 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     pose.close()
+    hands.close()
 
 
 if __name__ == "__main__":

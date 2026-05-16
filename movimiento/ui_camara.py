@@ -39,19 +39,36 @@ def _oscurecer(vista: np.ndarray, alpha: float = 0.55) -> np.ndarray:
     return cv2.addWeighted(overlay, alpha, vista, 1 - alpha, 0)
 
 
+def _tecla_flecha(tecla: int) -> str | None:
+    if tecla in (65362, 2490368, ord("w"), ord("W"), ord("k"), ord("K")):
+        return "arriba"
+    if tecla in (65364, 2621440, ord("s"), ord("S"), ord("j"), ord("J")):
+        return "abajo"
+    return None
+
+
 def pedir_nombre_movimiento(
     cap,
-    nombres_existentes: list[str] | None = None,
+    movimientos_existentes: list[tuple[str, int]] | None = None,
 ) -> str | None:
     """
-    Diálogo sobre la cámara para escribir el nombre del movimiento.
-    Enter: confirmar | Esc: cancelar | Retroceso: borrar | Tab: nombre existente
+    Selector sobre la cámara: movimiento existente o nombre nuevo.
+
+    Lista: flechas / W-S | Enter: elegir | Esc: cancelar (o volver desde nuevo)
+    Nuevo: escribir nombre | Enter: confirmar | Esc: volver a la lista
     """
+    existentes = sorted(movimientos_existentes or [], key=lambda x: x[0].lower())
+    items: list[tuple[str, int | None]] = [("+ Nuevo movimiento", None)]
+    items.extend((nombre, muestras) for nombre, muestras in existentes)
+
+    indice = 0
+    scroll = 0
+    modo_nuevo = not existentes
     nombre = ""
-    indice_sugerencia = -1
     cursor_visible = True
     ultimo_parpadeo = time.time()
-    nombres = sorted(nombres_existentes or [])
+    max_visibles = 6
+    alto_fila = 34
 
     while True:
         vista = _leer_frame(cap)
@@ -66,89 +83,180 @@ def pedir_nombre_movimiento(
         h, w = vista.shape[:2]
         vista = _oscurecer(vista, 0.5)
 
-        panel_w, panel_h = min(520, w - 40), 220
-        px, py = (w - panel_w) // 2, (h - panel_h) // 2
+        filas_lista = min(len(items), max_visibles)
+        panel_w = min(560, w - 40)
+        panel_h = 130 + filas_lista * alto_fila + (72 if modo_nuevo else 0)
+        px, py = (w - panel_w) // 2, max(20, (h - panel_h) // 2)
+
         cv2.rectangle(vista, (px, py), (px + panel_w, py + panel_h), (45, 45, 45), -1)
         cv2.rectangle(vista, (px, py), (px + panel_w, py + panel_h), (0, 200, 255), 2)
 
         cv2.putText(
             vista,
-            "NUEVO MOVIMIENTO",
-            (px + 20, py + 36),
+            "GRABAR MOVIMIENTO",
+            (px + 20, py + 34),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.75,
+            0.72,
             (0, 220, 255),
             2,
         )
+        subtitulo = (
+            "Escribe el nombre del movimiento nuevo"
+            if modo_nuevo
+            else "Elige uno existente o crea uno nuevo"
+        )
         cv2.putText(
             vista,
-            "Escribe el nombre y pulsa Enter",
-            (px + 20, py + 68),
+            subtitulo,
+            (px + 20, py + 62),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            (200, 200, 200),
+            0.44,
+            (180, 180, 180),
             1,
         )
 
-        texto = nombre if nombre else "ej: saludar"
-        color_texto = (255, 255, 255) if nombre else (120, 120, 120)
-        cv2.rectangle(vista, (px + 16, py + 88), (px + panel_w - 16, py + 130), (30, 30, 30), -1)
-        cv2.rectangle(vista, (px + 16, py + 88), (px + panel_w - 16, py + 130), (80, 80, 80), 1)
+        y_lista = py + 78
+        for fila in range(filas_lista):
+            idx = scroll + fila
+            if idx >= len(items):
+                break
 
-        mostrar = texto
-        if nombre and cursor_visible:
-            mostrar = nombre + "|"
-        cv2.putText(
-            vista,
-            mostrar[:28],
-            (px + 28, py + 120),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.72,
-            color_texto,
-            2,
-        )
+            etiqueta, muestras = items[idx]
+            y0 = y_lista + fila * alto_fila
+            y1 = y0 + alto_fila - 4
+            seleccionado = idx == indice and not modo_nuevo
 
-        ayuda = "Enter guardar   Esc cancelar   Tab nombre previo"
-        cv2.putText(
-            vista,
-            ayuda,
-            (px + 20, py + 158),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.38,
-            (160, 160, 160),
-            1,
-        )
+            if seleccionado:
+                cv2.rectangle(vista, (px + 14, y0), (px + panel_w - 14, y1), (50, 90, 50), -1)
+                cv2.rectangle(vista, (px + 14, y0), (px + panel_w - 14, y1), (0, 220, 120), 2)
+                prefijo, color = "> ", (120, 255, 120)
+            else:
+                prefijo, color = "  ", (200, 200, 200) if modo_nuevo else (170, 170, 170)
 
-        if nombres:
-            lista = "Existentes: " + ", ".join(nombres[:5])
-            if len(nombres) > 5:
-                lista += "..."
+            texto = prefijo + etiqueta
+            if muestras is not None:
+                texto += f"  ({muestras} muestra{'s' if muestras != 1 else ''})"
+
             cv2.putText(
                 vista,
-                lista,
-                (px + 20, py + 188),
+                texto[:42],
+                (px + 24, y0 + 24),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.38,
-                (100, 200, 100),
+                0.52,
+                color,
+                2 if seleccionado else 1,
+            )
+
+        if len(items) > max_visibles:
+            indicador = f"{indice + 1}/{len(items)}"
+            cv2.putText(
+                vista,
+                indicador,
+                (px + panel_w - 70, py + panel_h - 52),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (140, 140, 140),
                 1,
             )
 
-        cv2.imshow(VENTANA, vista)
-        tecla = cv2.waitKey(30) & 0xFF
+        y_campo = y_lista + filas_lista * alto_fila + 8
+        if modo_nuevo:
+            cv2.putText(
+                vista,
+                "Nombre nuevo:",
+                (px + 20, y_campo),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (0, 220, 255),
+                1,
+            )
+            cv2.rectangle(
+                vista,
+                (px + 16, y_campo + 10),
+                (px + panel_w - 16, y_campo + 48),
+                (30, 30, 30),
+                -1,
+            )
+            cv2.rectangle(
+                vista,
+                (px + 16, y_campo + 10),
+                (px + panel_w - 16, y_campo + 48),
+                (0, 200, 255),
+                1,
+            )
+            texto = nombre if nombre else "ej: saludar"
+            color_texto = (255, 255, 255) if nombre else (120, 120, 120)
+            mostrar = texto
+            if nombre and cursor_visible:
+                mostrar = nombre + "|"
+            cv2.putText(
+                vista,
+                mostrar[:28],
+                (px + 28, y_campo + 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.68,
+                color_texto,
+                2,
+            )
 
-        if tecla in (27, ord("q")):
+        ayuda = (
+            "Enter confirmar   Esc volver"
+            if modo_nuevo
+            else "Flechas elegir   Enter   Esc cancelar"
+        )
+        cv2.putText(
+            vista,
+            ayuda,
+            (px + 20, py + panel_h - 18),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            (140, 140, 140),
+            1,
+        )
+
+        cv2.imshow(VENTANA, vista)
+        tecla = cv2.waitKeyEx(30)
+        tecla_ff = tecla & 0xFF
+
+        if tecla_ff in (27, ord("q")):
+            if modo_nuevo and existentes:
+                modo_nuevo = False
+                nombre = ""
+                continue
             return None
-        if tecla in (13, 10):
-            limpio = nombre.strip()
-            return limpio if limpio else None
-        if tecla in (8, 127):
-            nombre = nombre[:-1]
-            indice_sugerencia = -1
-        elif tecla == 9 and nombres:
-            indice_sugerencia = (indice_sugerencia + 1) % len(nombres)
-            nombre = nombres[indice_sugerencia]
-        elif 32 <= tecla <= 126 and len(nombre) < 28:
-            nombre += chr(tecla)
+
+        if tecla_ff in (13, 10):
+            if modo_nuevo:
+                limpio = nombre.strip()
+                if limpio:
+                    return limpio
+                continue
+            if items[indice][1] is None:
+                modo_nuevo = True
+                nombre = ""
+            else:
+                return items[indice][0]
+            continue
+
+        if modo_nuevo:
+            if tecla_ff in (8, 127):
+                nombre = nombre[:-1]
+            elif 32 <= tecla_ff <= 126 and len(nombre) < 28:
+                nombre += chr(tecla_ff)
+            continue
+
+        flecha = _tecla_flecha(tecla if tecla > 255 else tecla_ff)
+        if flecha == "arriba":
+            indice = (indice - 1) % len(items)
+        elif flecha == "abajo":
+            indice = (indice + 1) % len(items)
+        elif tecla_ff == 9:
+            indice = (indice + 1) % len(items)
+
+        if indice < scroll:
+            scroll = indice
+        elif indice >= scroll + max_visibles:
+            scroll = indice - max_visibles + 1
 
 
 def cuenta_regresiva(
