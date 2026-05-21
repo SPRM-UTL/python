@@ -108,6 +108,7 @@ def entrenar_ia_desde_referencias(modelo_actual):
                 etiquetas.append(label_map[clave])
                 
     if len(secuencias) < 2:
+        print("[IA] No hay suficientes muestras para entrenar (mínimo 2).")
         return modelo_actual
 
     X = np.array(secuencias)
@@ -128,11 +129,19 @@ def main():
     if os.path.exists(MODEL_NAME):
         print(f"Cargando modelo neuronal: {MODEL_NAME}")
         modelo = load_model(MODEL_NAME)
+        # Verificar si el modelo existe y las referencias están disponibles
         if referencias and modelo.layers[-1].output_shape[-1] != len(referencias):
+            print("[IA] Desajuste entre modelo y referencias. Re-entrenando...")
             modelo = entrenar_ia_desde_referencias(modelo)
+        elif not referencias:
+            print("[IA] No hay referencias disponibles para usar el modelo.")
+            modelo = None
     else:
         if referencias:
+            print("[IA] Creando modelo inicial desde referencias...")
             modelo = entrenar_ia_desde_referencias(modelo)
+        else:
+            print("[IA] No hay referencias. Inicia creando gestos nuevos con [g].")
 
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640) #
@@ -217,21 +226,45 @@ def main():
                 secuencia_normalizada = ajustar_secuencia_a_30(buffer_dinamico, largo_objetivo=LARGO_SECUENCIA)
                 
                 referencias = cargar_referencias()
-                claves_ordenadas = sorted(list(referencias.keys()))
+                
+                # --- VALIDACIÓN CRÍTICA: Verificar que existen referencias y modelo ---
                 nombre_predicho = "Ninguno (Sin modelo)"
                 confianza = 0.0
+                idx = None
 
                 # Ejecutar predicción de la IA en la ráfaga normalizada de 30 frames
                 if modelo is not None and referencias:
-                    entrada_ia = np.expand_dims(np.array(secuencia_normalizada, dtype=np.float32), axis=0)
-                    prediccion = modelo.predict(entrada_ia, verbose=0)[0]
-                    idx = np.argmax(prediccion)
-                    confianza = prediccion[idx]
-                    nombre_predicho = nombre_visible(claves_ordenadas[idx]) #
-
-                print(f"\n[IA Veredicto]: Candidato -> '{nombre_predicho.upper()}' ({confianza*100:.1f}% confianza).")
+                    claves_ordenadas = sorted(list(referencias.keys()))
+                    
+                    # Verificar que hay al menos una clase disponible
+                    if len(claves_ordenadas) > 0:
+                        entrada_ia = np.expand_dims(np.array(secuencia_normalizada, dtype=np.float32), axis=0)
+                        prediccion = modelo.predict(entrada_ia, verbose=0)[0]
+                        idx = np.argmax(prediccion)
+                        confianza = prediccion[idx]
+                        
+                        # Verificar que el índice esté dentro del rango
+                        if idx < len(claves_ordenadas):
+                            nombre_predicho = nombre_visible(claves_ordenadas[idx])
+                        else:
+                            print(f"[!] Advertencia: Índice de predicción {idx} fuera de rango (máx {len(claves_ordenadas)-1})")
+                            nombre_predicho = "Error en predicción"
+                    else:
+                        print("[!] No hay gestos registrados en las referencias.")
+                        nombre_predicho = "Sin gestos registrados"
+                elif modelo is None:
+                    print("[!] No hay modelo de IA entrenado aún. Usa [g] para crear el primer gesto.")
+                elif not referencias:
+                    print("[!] No hay referencias de gestos disponibles.")
+                
+                # Mostrar veredicto de la IA (solo si hubo predicción válida)
+                if idx is not None and idx < len(claves_ordenadas) if 'claves_ordenadas' in locals() else False:
+                    print(f"\n[IA Veredicto]: Candidato -> '{nombre_predicho.upper()}' ({confianza*100:.1f}% confianza).")
+                else:
+                    print(f"\n[IA Veredicto]: {nombre_predicho}")
+                
                 print("\n¿Qué deseas hacer con este movimiento?")
-                print(f"  [s] Confirmar: Sí, es '{nombre_predicho}'")
+                print(f"  [s] Confirmar: Sí, es '{nombre_predicho}'" if nombre_predicho not in ["Ninguno (Sin modelo)", "Sin gestos registrados", "Error en predicción"] else "  [s] Confirmar: (No disponible - sin predicción válida)")
                 print("  [n] Corregir: Fue otra acción de la lista existente")
                 print("  [g] Crear: Es un movimiento completamente NUEVO")
                 print("  [c] Cancelar: Descartar captura")
@@ -240,19 +273,25 @@ def main():
                 nombre_final = None
                 
                 if opcion == 's':
-                    if modelo is None:
-                        print("[!] No hay modelo entrenado. Usa la opción [g].")
+                    if modelo is None or not referencias or nombre_predicho in ["Ninguno (Sin modelo)", "Sin gestos registrados", "Error en predicción"]:
+                        print("[!] No hay predicción válida para confirmar. Usa [n] o [g].")
                         continue
                     nombre_final = nombre_predicho
                 
                 elif opcion == 'n':
+                    if not referencias:
+                        print("[!] No hay gestos registrados. Usa [g] para crear uno nuevo.")
+                        continue
                     nombres_existentes = [nombre_visible(k) for k in referencias.keys()] #
                     print("\nMovimientos registrados:")
                     for i, n in enumerate(nombres_existentes):
                         print(f"  [{i}] {n}")
                     try:
                         idx_sel = int(input("Introduce el número correcto: "))
-                        nombre_final = nombres_existentes[idx_sel]
+                        if 0 <= idx_sel < len(nombres_existentes):
+                            nombre_final = nombres_existentes[idx_sel]
+                        else:
+                            print("[!] Número fuera de rango. Secuencia abortada.")
                     except Exception:
                         print("[!] Selección incorrecta. Secuencia abortada.")
                 
@@ -265,7 +304,8 @@ def main():
 
                 # --- GUARDADO Y RE-ENTRENAMIENTO ---
                 if nombre_final:
-                    clave_existente = buscar_clave_por_nombre(referencias, nombre_final) #
+                    referencias_actualizadas = cargar_referencias()  # Recargar por si acaso
+                    clave_existente = buscar_clave_por_nombre(referencias_actualizadas, nombre_final) #
                     
                     # Guardamos los 30 frames normalizados respetando tu estructura original
                     ruta, total, _ = guardar_referencia( #

@@ -1,0 +1,19 @@
+"""Parámetros del asistente de gestos (único pipeline activo)."""
+
+LARGO_SECUENCIA = 30
+MODEL_NAME = "ia_detector_referencias.h5"
+
+MIN_FRAMES_CAPTURA = 8
+EPOCHS_ENTRENAMIENTO = 35
+BATCH_SIZE = 4
+UMBRAL_CONFIANZA_LSTM = 0.5
+
+# MediaPipe: 1 = equilibrio precisión/velocidad
+POSE_COMPLEXITY = 1
+HANDS_COMPLEXITY = 1
+MIN_DETECTION_CONFIDENCE = 0.65
+MIN_TRACKING_CONFIDENCE = 0.65
+
+CAMARA_ANCHO = 640
+CAMARA_ALTO = 480
+SUAVIZADO_ALPHA = 0.35
