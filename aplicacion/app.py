@@ -21,12 +21,12 @@ COLORS = config["colors"]
 
 class CameraStream:
 
-    def __init__(self, source):
+    def __init__(self, source, cam_type="webcam"):
 
-        self.cap = cv2.VideoCapture(
-            source,
-            cv2.CAP_FFMPEG
-        )
+        if cam_type == "wifi":
+            self.cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+        else:
+            self.cap = cv2.VideoCapture(source)
 
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
