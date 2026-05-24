@@ -27,7 +27,8 @@ transforms = A.Compose(
 print("Cargando modelo DETR...")
 model = DETR(num_classes=3)
 model.eval()
-MODEL_WEIGHTS_PATH = os.path.join("aplicacion", "pretrained", "4426_model.pt")
+# MODEL_WEIGHTS_PATH = os.path.join("aplicacion", "pretrained", "4426_model.pt")
+MODEL_WEIGHTS_PATH = os.path.join("aplicacion", "pretrained", "99_model.pt")
 model.load_pretrained(MODEL_WEIGHTS_PATH)
 
 print("Iniciando captura de video en tiempo real...")
