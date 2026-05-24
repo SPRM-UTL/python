@@ -253,21 +253,66 @@ def detectar_mejor(
     indice: list[tuple[str, np.ndarray, float]],
     actual: np.ndarray,
 ) -> tuple[str, float, float]:
+    ranking = detectar_top_k(indice, actual, k=1)
+    if not ranking:
+        return "", 0.0, 0.0
+    nombre, score, umbral = ranking[0]
+    return nombre, score, umbral
+
+
+def detectar_top_k(
+    indice: list[tuple[str, np.ndarray, float]],
+    actual: np.ndarray,
+    k: int = 2,
+) -> list[tuple[str, float, float]]:
     act = normalizar_secuencia(actual)
-    mejor_nombre = ""
-    mejor_score = 0.0
-    umbral_actual = 0.0
+    resultados: list[tuple[str, float, float]] = []
     for nombre, ref, umbral in indice:
         score = _similitud_alineada(ref, act)
-        if score > mejor_score:
-            mejor_score = score
-            mejor_nombre = nombre
-            umbral_actual = umbral
-    return mejor_nombre, mejor_score, umbral_actual
+        resultados.append((nombre, score, umbral))
+    resultados.sort(key=lambda x: x[1], reverse=True)
+    return resultados[: max(1, k)]
+
+
+def ajustar_secuencia_a_largo(
+    secuencia: np.ndarray,
+    largo_objetivo: int,
+    *,
+    normalizar: bool = True,
+) -> np.ndarray:
+    """Interpola temporalmente a largo fijo; opcionalmente normaliza cada frame."""
+    arr = np.asarray(secuencia, dtype=np.float32)
+    if arr.ndim == 1:
+        arr = arr.reshape(1, -1)
+    largo_actual = len(arr)
+    if largo_actual == 0:
+        raise ValueError("La secuencia está vacía")
+
+    if largo_actual != largo_objetivo:
+        indices_originales = np.linspace(0, largo_actual - 1, num=largo_actual)
+        indices_nuevos = np.linspace(0, largo_actual - 1, num=largo_objetivo)
+        ajustada = np.zeros((largo_objetivo, arr.shape[1]), dtype=np.float32)
+        for coord in range(arr.shape[1]):
+            ajustada[:, coord] = np.interp(
+                indices_nuevos, indices_originales, arr[:, coord]
+            )
+        arr = ajustada
+
+    if normalizar:
+        arr = normalizar_secuencia(arr)
+    return arr.astype(np.float32)
+
+
+def preparar_secuencia_captura(
+    frames: list,
+    largo: int = 30,
+) -> np.ndarray:
+    """Pipeline único: interpolar a N frames y normalizar espacialmente."""
+    return ajustar_secuencia_a_largo(np.array(frames, dtype=np.float32), largo, normalizar=True)
 
 
 def umbral_deteccion(num_muestras: int) -> float:
-    return min(0.55, 0.22 + 0.035 * max(1, num_muestras))
+    return min(0.62, 0.30 + 0.028 * max(1, num_muestras))
 
 
 def _nombre_limpio(nombre: str) -> str:
