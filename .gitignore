@@ -1,2 +1,9 @@
-.env
-videos/
+.venv/
+__pycache__/
+*.pyc
+
+aplicacion/pretrained/
+*.pt
+*.pth
+
+uv.lock
