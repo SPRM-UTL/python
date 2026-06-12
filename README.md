@@ -1,4 +1,4 @@
-# 🤖 Manordomo - Sistema de Reconocimiento de Gestos para Control Domótico
+# Manordomo - Sistema de Reconocimiento de Gestos para Control Domótico
 
 ## Descripción
 
@@ -231,19 +231,3 @@ python asistente_videos.py
 * Entrenamiento automático de nuevos gestos.
 
 ---
-
-## Autor
-
-José Ángel Cuéllar Gutiérrez
-
-Universidad Tecnológica de León
-
-Ingeniería en Desarrollo y Gestión de Software
-
-Proyecto Integrador - Extracción de Conocimiento de Bases de Datos
-
----
-
-## Licencia
-
-Proyecto desarrollado con fines académicos y educativos.
